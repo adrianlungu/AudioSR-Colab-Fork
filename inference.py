@@ -101,7 +101,9 @@ class Predictor(BasePredictor):
             for i, chunk in enumerate(chunks):
                 loudness_before = meter_before.integrated_loudness(chunk)
                 print(f"Processing chunk {i+1} of {len(chunks)} for {'Left/Mono' if ch_idx == 0 else 'Right'} channel")
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as temp_wav:
+                temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+                try:
+                    temp_wav.close()  # Close the file to release the handle: https://stackoverflow.com/questions/15588314/cant-access-temporary-files-created-with-tempfile
                     sf.write(temp_wav.name, chunk, sr)
 
                     out_chunk = super_resolution(
@@ -135,6 +137,8 @@ class Predictor(BasePredictor):
                     start = i * (output_chunk_samples - output_overlap_samples if enable_overlap else output_chunk_samples)
                     end = start + out_chunk.shape[0]
                     reconstructed_channels[ch_idx][0, start:end] += out_chunk.flatten()
+                finally:
+                    os.remove(temp_wav.name)  # Manually delete the file
 
         reconstructed_audio = np.stack(reconstructed_channels, axis=-1) if is_stereo else reconstructed_channels[0]
 
